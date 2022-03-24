@@ -32,32 +32,47 @@ inline bool overlapSlabs(const float* amin, const float* amax,
 						 const float* bmin, const float* bmax,
 						 const float px, const float py)
 {
+    // amin/amax/bmin/bmax 中 数组 0 是 x 或者 z，数组 1 是 y
+    
 	// Check for horizontal overlap.
+    // 检查水平重叠
 	// The segment is shrunken a little so that slabs which touch
 	// at end points are not connected.
+    // 该段会稍微收缩，以便在端点处接触的板不会连接起来
 	const float minx = dtMax(amin[0]+px,bmin[0]+px);
 	const float maxx = dtMin(amax[0]-px,bmax[0]-px);
 	if (minx > maxx)
 		return false;
 	
 	// Check vertical overlap.
+    // 检查垂直重叠
+    // y = kx+b
+    // k = ad b = ak
+    // k = bd b = bk
+    // 计算 a 与 b 中 y = kx+b 的 k 与 b
 	const float ad = (amax[1]-amin[1]) / (amax[0]-amin[0]);
 	const float ak = amin[1] - ad*amin[0];
 	const float bd = (bmax[1]-bmin[1]) / (bmax[0]-bmin[0]);
 	const float bk = bmin[1] - bd*bmin[0];
+    // 计算 minx 与 maxx 在两条线上的 y
 	const float aminy = ad*minx + ak;
 	const float amaxy = ad*maxx + ak;
 	const float bminy = bd*minx + bk;
 	const float bmaxy = bd*maxx + bk;
+    // 计算 min 与 max y 轴的差
 	const float dmin = bminy - aminy;
 	const float dmax = bmaxy - amaxy;
 		
 	// Crossing segments always overlap.
+    // 画图可以看出来，这种情况肯定是重叠的
 	if (dmin*dmax < 0)
 		return true;
 		
 	// Check for overlap at endpoints.
+    // 距离存在小于 py*2 的点就认为可重叠，py 是 tile 的可攀爬高度
+    // FIXME: 这里乘 2 是放宽了 tile 之间的可攀爬高度的限制嘛
 	const float thr = dtSqr(py*2);
+    // 平方可以避免判断正负
 	if (dmin*dmin <= thr || dmax*dmax <= thr)
 		return true;
 		
@@ -66,6 +81,8 @@ inline bool overlapSlabs(const float* amin, const float* amax,
 
 static float getSlabCoord(const float* va, const int side)
 {
+    // x- x+ 方向的边返回 x
+    // z- z+ 方向的边返回 z
 	if (side == 0 || side == 4)
 		return va[0];
 	else if (side == 2 || side == 6)
@@ -73,10 +90,14 @@ static float getSlabCoord(const float* va, const int side)
 	return 0;
 }
 
+// 如果 x 坐标相等，取 yz 平面的 aabb 包围盒
+// 如果 z 坐标相等，取 xy 平面的 aabb 包围盒
 static void calcSlabEndPoints(const float* va, const float* vb, float* bmin, float* bmax, const int side)
 {
 	if (side == 0 || side == 4)
 	{
+        // x-- x++
+        // va[0] == vb[0]
 		if (va[2] < vb[2])
 		{
 			bmin[0] = va[2];
@@ -94,6 +115,8 @@ static void calcSlabEndPoints(const float* va, const float* vb, float* bmin, flo
 	}
 	else if (side == 2 || side == 6)
 	{
+        // z-- z++
+        // va[2] == vb[2]
 		if (va[0] < vb[0])
 		{
 			bmin[0] = va[0];
@@ -304,16 +327,26 @@ int dtNavMesh::findConnectingPolys(const float* va, const float* vb,
 	if (!tile) return 0;
 	
 	float amin[2], amax[2];
+    // 如果 x 坐标相等，取 yz 平面的 aabb 包围盒
+    // 如果 z 坐标相等，取 xy 平面的 aabb 包围盒
 	calcSlabEndPoints(va, vb, amin, amax, side);
+    // va vb 在 xz 上肯定是有一条轴坐标是相等的，依据方向取那个相等的返回为 apos
 	const float apos = getSlabCoord(va, side);
 
 	// Remove links pointing to 'side' and compact the links array. 
 	float bmin[2], bmax[2];
+    // side 在传进来的时候就取反转换成 tile 中的方向
 	unsigned short m = DT_EXT_LINK | (unsigned short)side;
 	int n = 0;
 	
 	dtPolyRef base = getPolyRefBase(tile);
 	
+    // 获取 tile 中与 va vb 连接的多边形
+    // 1. 循环遍历 tile 的多边形，比较多边形中的边界，找到 side 相同的边
+    // 2. 保证两条边的距离足够相近(误差在 0.01f, 基本算相等)。(边界上的 xz 肯定有一条轴相等。取相等的那一条边，与 va vb 的出来的值作比较)
+    // 3. 两条边的包围盒重叠(y轴将攀爬高度也计算在内)
+    // 4. 满足条件与数量，将多边形信息放入返回值内
+    
 	for (int i = 0; i < tile->header->polyCount; ++i)
 	{
 		dtPoly* poly = &tile->polys[i];
@@ -350,6 +383,7 @@ int dtNavMesh::findConnectingPolys(const float* va, const float* vb,
 	return n;
 }
 
+// 取消两个 tile 之间的链接
 void dtNavMesh::unconnectLinks(dtMeshTile* tile, dtMeshTile* target)
 {
 	if (!tile || !target) return;
@@ -360,9 +394,11 @@ void dtNavMesh::unconnectLinks(dtMeshTile* tile, dtMeshTile* target)
 	{
 		dtPoly* poly = &tile->polys[i];
 		unsigned int j = poly->firstLink;
+        // j 的前一个
 		unsigned int pj = DT_NULL_LINK;
 		while (j != DT_NULL_LINK)
 		{
+            // 判断 target tile id 是否相等
 			if (decodePolyIdTile(tile->links[j].ref) == targetNum)
 			{
 				// Remove link.
@@ -384,6 +420,7 @@ void dtNavMesh::unconnectLinks(dtMeshTile* tile, dtMeshTile* target)
 	}
 }
 
+// 两个 tile 之间的链接
 void dtNavMesh::connectExtLinks(dtMeshTile* tile, dtMeshTile* target, int side)
 {
 	if (!tile) return;
@@ -412,12 +449,16 @@ void dtNavMesh::connectExtLinks(dtMeshTile* tile, dtMeshTile* target, int side)
 			const float* vb = &tile->verts[poly->verts[(j+1) % nv]*3];
 			dtPolyRef nei[4];
 			float neia[4*2];
+            // dtOppositeTile(dir) 方向取反，对于 target 来说 dir 应该与 tile 正好相反
+            // 找到 target 中与 va vb 连接的多边形 nei 以及包围盒 neia, 数量为 nnei
+            // neia 中存的只有 x 或 z (视 dir 而定)的 min 与 max
 			int nnei = findConnectingPolys(va,vb, target, dtOppositeTile(dir), nei,neia,4);
 			for (int k = 0; k < nnei; ++k)
 			{
 				unsigned int idx = allocLink(tile);
 				if (idx != DT_NULL_LINK)
 				{
+                    // tile 中存储与 target 多边形连接的信息
 					dtLink* link = &tile->links[idx];
 					link->ref = nei[k];
 					link->edge = (unsigned char)j;
@@ -427,8 +468,10 @@ void dtNavMesh::connectExtLinks(dtMeshTile* tile, dtMeshTile* target, int side)
 					poly->firstLink = idx;
 
 					// Compress portal limits to a byte value.
+                    // neia 中存的梳理理论上比 vb-va 小
 					if (dir == 0 || dir == 4)
 					{
+                        // x++ or x-- 方向, neia 里面存的是 zmin zmax
 						float tmin = (neia[k*2+0]-va[2]) / (vb[2]-va[2]);
 						float tmax = (neia[k*2+1]-va[2]) / (vb[2]-va[2]);
 						if (tmin > tmax)
@@ -438,6 +481,7 @@ void dtNavMesh::connectExtLinks(dtMeshTile* tile, dtMeshTile* target, int side)
 					}
 					else if (dir == 2 || dir == 6)
 					{
+                        // z++ or z-- 方向, neia 里面存的是 xmin xmax
 						float tmin = (neia[k*2+0]-va[0]) / (vb[0]-va[0]);
 						float tmax = (neia[k*2+1]-va[0]) / (vb[0]-va[0]);
 						if (tmin > tmax)
@@ -451,6 +495,7 @@ void dtNavMesh::connectExtLinks(dtMeshTile* tile, dtMeshTile* target, int side)
 	}
 }
 
+// 两个 tile 之间相互连接的 OffMesh 相互添加 link 索引
 void dtNavMesh::connectExtOffMeshLinks(dtMeshTile* tile, dtMeshTile* target, int side)
 {
 	if (!tile) return;
@@ -537,15 +582,18 @@ void dtNavMesh::connectIntLinks(dtMeshTile* tile)
 			
 		// Build edge links backwards so that the links will be
 		// in the linked list from lowest index to highest.
+        // 向后构建边缘链接，这样链接将从最低索引到最高索引位于链接列表中
 		for (int j = poly->vertCount-1; j >= 0; --j)
 		{
 			// Skip hard and non-internal edges.
 			if (poly->neis[j] == 0 || (poly->neis[j] & DT_EXT_LINK)) continue;
 
+            // 从链表 head 插入
 			unsigned int idx = allocLink(tile);
 			if (idx != DT_NULL_LINK)
 			{
 				dtLink* link = &tile->links[idx];
+                // 这里减 1 才是对应了真正连接的凸多边形
 				link->ref = base | (dtPolyRef)(poly->neis[j]-1);
 				link->edge = (unsigned char)j;
 				link->side = 0xff;
@@ -558,6 +606,7 @@ void dtNavMesh::connectIntLinks(dtMeshTile* tile)
 	}
 }
 
+// 相互连接的 OffMesh 相互添加 link 索引
 void dtNavMesh::baseOffMeshLinks(dtMeshTile* tile)
 {
 	if (!tile) return;
@@ -628,9 +677,11 @@ namespace
 		float tmin = 0;
 		const float* pmin = 0;
 		const float* pmax = 0;
-
+            
+        // 找一个距离多最近的边，插值到 pos
 		for (int i = 0; i < pd->triCount; i++)
 		{
+            // 这里使用的是三角形 flag 在那个方向是多边形的边界
 			const unsigned char* tris = &tile->detailTris[(pd->triBase + i) * 4];
 			const int ANY_BOUNDARY_EDGE =
 				(DT_DETAIL_EDGE_BOUNDARY << 0) |
@@ -655,6 +706,7 @@ namespace
 				{
 					// Only looking at boundary edges and this is internal, or
 					// this is an inner edge that we will see again or have already seen.
+                    // 只看多边形的边界边，这是内部的，或者这是我们已经看过的内部边
 					continue;
 				}
 
@@ -669,7 +721,7 @@ namespace
 				}
 			}
 		}
-
+        
 		dtVlerp(closest, pmin, pmax, tmin);
 	}
 }
@@ -702,6 +754,7 @@ bool dtNavMesh::getPolyHeight(const dtMeshTile* tile, const dtPoly* poly, const 
 		const float* v[3];
 		for (int k = 0; k < 3; ++k)
 		{
+            // 在 build 参数的时候进行了拆分，detailVerts 里面只有采样点没有轮廓点
 			if (t[k] < poly->vertCount)
 				v[k] = &tile->verts[poly->verts[t[k]]*3];
 			else
@@ -719,7 +772,10 @@ bool dtNavMesh::getPolyHeight(const dtMeshTile* tile, const dtPoly* poly, const 
 	// or larger floating point values) the point is on an edge, so just select
 	// closest. This should almost never happen so the extra iteration here is
 	// ok.
+    // 如果以上所有三角形检查都失败（退化三角形或更大的浮点值可能会发生），则该点位于边上，因此只需选择“最近”。
+    // 这几乎不应该发生，所以这里的额外迭代是可以的。
 	float closest[3];
+    // 找一个 pos 距离多变形最近的边，从边插值到 pos
 	closestPointOnDetailEdges<false>(tile, poly, pos, closest);
 	*height = closest[1];
 	return true;
@@ -918,6 +974,8 @@ dtStatus dtNavMesh::addTile(unsigned char* data, int dataSize, int flags,
 #ifndef DT_POLYREF64
 	// Do not allow adding more polygons than specified in the NavMesh's maxPolys constraint.
 	// Otherwise, the poly ID cannot be represented with the given number of bits.
+    // 不允许添加多于NavMesh的maxPolys约束中指定的多边形。
+    // 否则，多边形ID不能用给定的位数表示。
 	if (m_polyBits < dtIlog2(dtNextPow2((unsigned int)header->polyCount)))
 		return DT_FAILURE | DT_INVALID_PARAM;
 #endif
@@ -925,11 +983,14 @@ dtStatus dtNavMesh::addTile(unsigned char* data, int dataSize, int flags,
 	// Make sure the location is free.
 	if (getTileAt(header->x, header->y, header->layer))
 		return DT_FAILURE | DT_ALREADY_OCCUPIED;
-		
+	
+    // 1. 分配 tile
+    
 	// Allocate a tile.
 	dtMeshTile* tile = 0;
 	if (!lastRef)
 	{
+        // 从 next free 中分配一个给 tile
 		if (m_nextFree)
 		{
 			tile = m_nextFree;
@@ -939,6 +1000,7 @@ dtStatus dtNavMesh::addTile(unsigned char* data, int dataSize, int flags,
 	}
 	else
 	{
+        // 恢复 lastRef 所定义的 tile
 		// Try to relocate the tile to specific index with same salt.
 		int tileIndex = (int)decodePolyIdTile((dtPolyRef)lastRef);
 		if (tileIndex >= m_maxTiles)
@@ -974,6 +1036,8 @@ dtStatus dtNavMesh::addTile(unsigned char* data, int dataSize, int flags,
 	tile->next = m_posLookup[h];
 	m_posLookup[h] = tile;
 	
+    // 2. 从传入数据中初始化 tile 的基本数据
+    
 	// Patch header pointers.
 	const int headerSize = dtAlign4(sizeof(dtMeshHeader));
 	const int vertsSize = dtAlign4(sizeof(float)*3*header->vertCount);
@@ -999,6 +1063,9 @@ dtStatus dtNavMesh::addTile(unsigned char* data, int dataSize, int flags,
 	if (!bvtreeSize)
 		tile->bvTree = 0;
 
+    // 2. 构建 tile 内 tile 之间的多边形连接
+    
+    // link 是在这里 build 的
 	// Build links freelist
 	tile->linksFreeList = 0;
 	tile->links[header->maxLinkCount-1].next = DT_NULL_LINK;
@@ -1011,9 +1078,11 @@ dtStatus dtNavMesh::addTile(unsigned char* data, int dataSize, int flags,
 	tile->dataSize = dataSize;
 	tile->flags = flags;
 
+    // build tile 内的多边形 link
 	connectIntLinks(tile);
 
 	// Base off-mesh connections to their starting polygons and connect connections inside the tile.
+    // FIXME: 有时间看 off mesh
 	baseOffMeshLinks(tile);
 	connectExtOffMeshLinks(tile, tile, -1);
 
@@ -1023,26 +1092,32 @@ dtStatus dtNavMesh::addTile(unsigned char* data, int dataSize, int flags,
 	int nneis;
 	
 	// Connect with layers in current tile.
+    // 链接 y 上下方向的 tile
 	nneis = getTilesAt(header->x, header->y, neis, MAX_NEIS);
 	for (int j = 0; j < nneis; ++j)
 	{
 		if (neis[j] == tile)
 			continue;
 	
+        // 两个 tile 之间的链接
 		connectExtLinks(tile, neis[j], -1);
 		connectExtLinks(neis[j], tile, -1);
+        // 两个 tile off mesh 之间的链接
 		connectExtOffMeshLinks(tile, neis[j], -1);
 		connectExtOffMeshLinks(neis[j], tile, -1);
 	}
 	
 	// Connect with neighbour tiles.
+    // 链接 xz 平面八个方向的邻居 tile
 	for (int i = 0; i < 8; ++i)
 	{
 		nneis = getNeighbourTilesAt(header->x, header->y, i, neis, MAX_NEIS);
 		for (int j = 0; j < nneis; ++j)
 		{
+            // 两个 tile 之间的链接
 			connectExtLinks(tile, neis[j], i);
 			connectExtLinks(neis[j], tile, dtOppositeTile(i));
+            // 两个 tile off mesh 之间的链接
 			connectExtOffMeshLinks(tile, neis[j], i);
 			connectExtOffMeshLinks(neis[j], tile, dtOppositeTile(i));
 		}

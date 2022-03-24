@@ -226,7 +226,10 @@ dtStatus dtNavMeshQuery::findRandomPoint(const dtQueryFilter* filter, float (*fr
 	if (!filter || !frand || !randomRef || !randomPt)
 		return DT_FAILURE | DT_INVALID_PARAM;
 
+    // 1. 随机选择一个 tile
+    
 	// Randomly pick one tile. Assume that all tiles cover roughly the same area.
+    // 假设所有 tile 覆盖的面积大致相同。
 	const dtMeshTile* tile = 0;
 	float tsum = 0.0f;
 	for (int i = 0; i < m_nav->getMaxTiles(); i++)
@@ -243,6 +246,8 @@ dtStatus dtNavMeshQuery::findRandomPoint(const dtQueryFilter* filter, float (*fr
 	}
 	if (!tile)
 		return DT_FAILURE;
+    
+    // 2. 在 tile 满足条件的多边形中随机选择一个多边形
 
 	// Randomly pick one polygon weighted by polygon area.
 	const dtPoly* poly = 0;
@@ -284,6 +289,8 @@ dtStatus dtNavMeshQuery::findRandomPoint(const dtQueryFilter* filter, float (*fr
 	if (!poly)
 		return DT_FAILURE;
 
+    // 3. 在 tile 多边形中随机选择一个点
+    
 	// Randomly pick point on polygon.
 	const float* v = &tile->verts[poly->verts[0]*3];
 	float verts[3*DT_VERTS_PER_POLYGON];
@@ -301,6 +308,7 @@ dtStatus dtNavMeshQuery::findRandomPoint(const dtQueryFilter* filter, float (*fr
 	float pt[3];
 	dtRandomPointInConvexPoly(verts, poly->vertCount, areas, s, t, pt);
 	
+    // 4. 更新点的高度
 	float h = 0.0f;
 	dtStatus status = getPolyHeight(polyRef, pt, &h);
 	if (dtStatusFailed(status))
@@ -356,7 +364,8 @@ dtStatus dtNavMeshQuery::findRandomPointAroundCircle(dtPolyRef startRef, const f
 	const dtMeshTile* randomTile = 0;
 	const dtPoly* randomPoly = 0;
 	dtPolyRef randomPolyRef = 0;
-
+    
+    // 用类似 A* 的法子计算出 cent pos 在 maxRadius 范围内的所有可达多边形，随机选一个
 	while (!m_openList->empty())
 	{
 		dtNode* bestNode = m_openList->pop();
@@ -442,6 +451,7 @@ dtStatus dtNavMeshQuery::findRandomPointAroundCircle(dtPolyRef startRef, const f
 				continue;
 			
 			// Cost
+            // 把 pos 插值到 va vb 中间
 			if (neighbourNode->flags == 0)
 				dtVlerp(neighbourNode->pos, va, vb, 0.5f);
 			
@@ -471,6 +481,7 @@ dtStatus dtNavMeshQuery::findRandomPointAroundCircle(dtPolyRef startRef, const f
 	if (!randomPoly)
 		return DT_FAILURE;
 	
+    // 从多边形中随机点并获取高度插值
 	// Randomly pick point on polygon.
 	const float* v = &randomTile->verts[randomPoly->verts[0]*3];
 	float verts[3*DT_VERTS_PER_POLYGON];
@@ -559,6 +570,9 @@ dtStatus dtNavMeshQuery::closestPointOnPolyBoundary(dtPolyRef ref, const float* 
 		nv++;
 	}		
 	
+    // 返回值确定是否在凸多边形里面
+    // edged 返回点 pos 到每个边的距离
+    // edget 返回点 pos 到每个边的插值
 	bool inside = dtDistancePtPolyEdgesSqr(pos, verts, nv, edged, edget);
 	if (inside)
 	{
@@ -567,6 +581,7 @@ dtStatus dtNavMeshQuery::closestPointOnPolyBoundary(dtPolyRef ref, const float* 
 	}
 	else
 	{
+        // 找到距离多边形最近的边插值得到 closest
 		// Point is outside the polygon, dtClamp to nearest edge.
 		float dmin = edged[0];
 		int imin = 0;
@@ -606,6 +621,7 @@ dtStatus dtNavMeshQuery::getPolyHeight(dtPolyRef ref, const float* pos, float* h
 	// We used to return success for offmesh connections, but the
 	// getPolyHeight in DetourNavMesh does not do this, so special
 	// case it here.
+    // offmesh 的处理
 	if (poly->getType() == DT_POLYTYPE_OFFMESH_CONNECTION)
 	{
 		const float* v0 = &tile->verts[poly->verts[0]*3];
@@ -992,6 +1008,8 @@ dtStatus dtNavMeshQuery::findPath(dtPolyRef startRef, dtPolyRef endRef,
 	m_nodePool->clear();
 	m_openList->clear();
 	
+    // A* 寻路
+    
 	dtNode* startNode = m_nodePool->getNode(startRef);
 	dtVcopy(startNode->pos, startPos);
 	startNode->pidx = 0;
@@ -1054,6 +1072,7 @@ dtStatus dtNavMeshQuery::findPath(dtPolyRef startRef, dtPolyRef endRef,
 				continue;
 
 			// deal explicitly with crossing tile boundaries
+            // FIXME: crossSide 右移一位是干啥
 			unsigned char crossSide = 0;
 			if (bestTile->links[i].side != 0xff)
 				crossSide = bestTile->links[i].side >> 1;
@@ -1165,6 +1184,7 @@ dtStatus dtNavMeshQuery::getPathToNode(dtNode* endNode, dtPolyRef* path, int* pa
 	} while (curNode);
 
 	// If the path cannot be fully stored then advance to the last node we will be able to store.
+    // 去掉超过 maxPath 的 Node
 	curNode = endNode;
 	int writeCount;
 	for (writeCount = length; writeCount > maxPath; writeCount--)
@@ -1779,11 +1799,13 @@ dtStatus dtNavMeshQuery::appendPortals(const int startIdx, const int endIdx, con
 /// they will be filled as far as possible from the start toward the end 
 /// position.
 ///
+/// 拉绳算法
 dtStatus dtNavMeshQuery::findStraightPath(const float* startPos, const float* endPos,
 										  const dtPolyRef* path, const int pathSize,
 										  float* straightPath, unsigned char* straightPathFlags, dtPolyRef* straightPathRefs,
 										  int* straightPathCount, const int maxStraightPath, const int options) const
 {
+    // options 默认为 0
 	dtAssert(m_nav);
 
 	if (!straightPathCount)
@@ -1811,6 +1833,7 @@ dtStatus dtNavMeshQuery::findStraightPath(const float* startPos, const float* en
 		return DT_FAILURE | DT_INVALID_PARAM;
 	
 	// Add start point.
+    // 先将 start point 加入 straightPath
 	stat = appendVertex(closestStartPos, DT_STRAIGHTPATH_START, path[0],
 						straightPath, straightPathFlags, straightPathRefs,
 						straightPathCount, maxStraightPath);
@@ -1847,6 +1870,7 @@ dtStatus dtNavMeshQuery::findStraightPath(const float* startPos, const float* en
 				{
 					// Failed to get portal points, in practice this means that path[i+1] is invalid polygon.
 					// Clamp the end point to path[i], and return the path so far.
+                    // 无法获取入口点，实际上这意味着路径[i+1]无效。将端点钳制到路径[i]，然后返回到目前为止的路径。
 					
 					if (dtStatusFailed(closestPointOnPolyBoundary(path[i], endPos, closestEndPos)))
 					{
@@ -1863,6 +1887,7 @@ dtStatus dtNavMeshQuery::findStraightPath(const float* startPos, const float* en
 											 straightPathCount, maxStraightPath, options);
 					}
 
+                    // 把终点加进去
 					// Ignore status return value as we're just about to return anyway.
 					appendVertex(closestEndPos, 0, path[i],
 										straightPath, straightPathFlags, straightPathRefs,
@@ -2030,6 +2055,10 @@ dtStatus dtNavMeshQuery::findStraightPath(const float* startPos, const float* en
 /// be filled as far as possible from the start position toward the end 
 /// position.
 ///
+/// 该方法针对较小距离移动和少量多边形进行了优化。如果使用的距离太远，结果集将形成不完整的路径
+/// 返回从 startPos 到 endPos 所经过的多边形路径，经过的多边形 visited 数量 visitedCount
+/// 以 startPos endPos 终点为圆心(searchPos)，startPos endPos 距离一半也半径(searchRadSqr)
+/// 寻找在此范围内的多边形，寻找 startPos 到 endPos 的路径
 dtStatus dtNavMeshQuery::moveAlongSurface(dtPolyRef startRef, const float* startPos, const float* endPos,
 										  const dtQueryFilter* filter,
 										  float* resultPos, dtPolyRef* visited, int* visitedCount, const int maxVisitedSize) const
@@ -2254,6 +2283,7 @@ dtStatus dtNavMeshQuery::getPortalPoints(dtPolyRef from, dtPolyRef to, float* le
 	return getPortalPoints(from, fromPoly, fromTile, to, toPoly, toTile, left, right);
 }
 
+// 返回多边形共享边
 // Returns portal points between two polygons.
 dtStatus dtNavMeshQuery::getPortalPoints(dtPolyRef from, const dtPoly* fromPoly, const dtMeshTile* fromTile,
 										 dtPolyRef to, const dtPoly* toPoly, const dtMeshTile* toTile,
@@ -2272,6 +2302,7 @@ dtStatus dtNavMeshQuery::getPortalPoints(dtPolyRef from, const dtPoly* fromPoly,
 	if (!link)
 		return DT_FAILURE | DT_INVALID_PARAM;
 	
+    // 1. 先找 offmesh
 	// Handle off-mesh connections.
 	if (fromPoly->getType() == DT_POLYTYPE_OFFMESH_CONNECTION)
 	{
@@ -2304,6 +2335,7 @@ dtStatus dtNavMeshQuery::getPortalPoints(dtPolyRef from, const dtPoly* fromPoly,
 		return DT_FAILURE | DT_INVALID_PARAM;
 	}
 	
+    // 2. 找正常的凸多边形连接
 	// Find portal vertices.
 	const int v0 = fromPoly->verts[link->edge];
 	const int v1 = fromPoly->verts[(link->edge+1) % (int)fromPoly->vertCount];
@@ -2317,6 +2349,7 @@ dtStatus dtNavMeshQuery::getPortalPoints(dtPolyRef from, const dtPoly* fromPoly,
 		// Unpack portal limits.
 		if (link->bmin != 0 || link->bmax != 255)
 		{
+            // 通过包围盒进行插值算出点的坐标
 			const float s = 1.0f/255.0f;
 			const float tmin = link->bmin*s;
 			const float tmax = link->bmax*s;

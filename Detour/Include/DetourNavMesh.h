@@ -87,6 +87,7 @@ static const unsigned short DT_EXT_LINK = 0x8000;
 /// A value that indicates the entity does not link to anything.
 static const unsigned int DT_NULL_LINK = 0xffffffff;
 
+// 双向连接
 /// A flag that indicates that an off-mesh connection can be traversed in both directions. (Is bidirectional.)
 static const unsigned int DT_OFFMESH_CON_BIDIR = 1;
 
@@ -143,8 +144,10 @@ static const float DT_RAY_CAST_LIMIT_PROPORTIONS = 50.0f;
 /// Flags representing the type of a navigation mesh polygon.
 enum dtPolyTypes
 {
+    // 多边形是标准的凸多边形，是网格曲面的一部分
 	/// The polygon is a standard convex polygon that is part of the surface of the mesh.
 	DT_POLYTYPE_GROUND = 0,
+    // 多边形是由两个顶点组成的非网格连接。
 	/// The polygon is an off-mesh connection consisting of two vertices.
 	DT_POLYTYPE_OFFMESH_CONNECTION = 1,
 };
@@ -154,6 +157,7 @@ enum dtPolyTypes
 /// @ingroup detour
 struct dtPoly
 {
+    // 链接到对应 tile 的 links 里面
 	/// Index to first link in linked list. (Or #DT_NULL_LINK if there is no link.)
 	unsigned int firstLink;
 
@@ -161,6 +165,43 @@ struct dtPoly
 	/// The actual vertices are located in dtMeshTile::verts.
 	unsigned short verts[DT_VERTS_PER_POLYGON];
 
+    //    // border size > 0
+    //    if (src[nvp+j] & 0x8000)
+    //    {
+    //        // Border or portal edge.
+    //        unsigned short dir = src[nvp+j] & 0xf;
+    //        if (dir == 0xf) // Border
+    //            p->neis[j] = 0;
+    //        else if (dir == 0) // Portal x-
+    //            p->neis[j] = DT_EXT_LINK | 4;
+    //        else if (dir == 1) // Portal z+
+    //            p->neis[j] = DT_EXT_LINK | 2;
+    //        else if (dir == 2) // Portal x+
+    //            p->neis[j] = DT_EXT_LINK | 0;
+    //        else if (dir == 3) // Portal z-
+    //            p->neis[j] = DT_EXT_LINK | 6;
+    //    }
+    //    else
+    //    {
+    //        // Normal connection
+    //        // 记录和哪个多边形相邻 注意这里 + 了个 1,
+    //        // 最开始的时候初值是 0xff, 默认的加 1 变成 0, 有连接信息的被修改-1才是对应真正的多边形
+    //        p->neis[j] = src[nvp+j]+1;
+    //    }
+    //
+    // border
+    //
+    //            ^ z
+    //            |        ↑ side 2
+    //            |          z+
+    //            |----------------|
+    //   x-       |                |
+    // side 4 ←   |                | → side 0 x+
+    //            |                |
+    //------------+--------------------------> x
+    //            |        | z-
+    //            |        ↓ side 6
+    //            |
 	/// Packed data representing neighbor polygons references and flags for each edge.
 	unsigned short neis[DT_VERTS_PER_POLYGON];
 
@@ -181,8 +222,11 @@ struct dtPoly
 	inline void setType(unsigned char t) { areaAndtype = (areaAndtype & 0x3f) | (t << 6); }
 
 	/// Gets the user defined area id.
+    /// 区域可行走还是不可行走 DT_TILECACHE_NULL_AREA or  DT_TILECACHE_WALKABLE_AREA
 	inline unsigned char getArea() const { return areaAndtype & 0x3f; }
 
+    // DT_POLYTYPE_GROUND or DT_POLYTYPE_OFFMESH_CONNECTION
+    // 网格一部分的凸多边形还是 off mesh 生成的
 	/// Gets the polygon type. (See: #dtPolyTypes)
 	inline unsigned char getType() const { return areaAndtype >> 6; }
 };
@@ -201,10 +245,15 @@ struct dtPolyDetail
 /// @see dtMeshTile
 struct dtLink
 {
+    /// 与哪个凸多边形相邻
 	dtPolyRef ref;					///< Neighbour reference. (The neighbor that is linked to.)
+    /// 链表的下一个
 	unsigned int next;				///< Index of the next link.
+    /// 在多边形的第几个顶点
 	unsigned char edge;				///< Index of the polygon edge that owns this link.
+    /// tile 内的多边形为 0xff，tile 之间存了方向
 	unsigned char side;				///< If a boundary link, defines on which side the link is.
+    /// tile 内的多边形为 0, tile 之间存了包围盒注意是压缩过的数据(见 connectExtLinks))
 	unsigned char bmin;				///< If a boundary link, defines the minimum sub-edge area.
 	unsigned char bmax;				///< If a boundary link, defines the maximum sub-edge area.
 };
@@ -286,6 +335,7 @@ struct dtMeshTile
 	dtMeshHeader* header;				///< The tile header.
 	dtPoly* polys;						///< The tile polygons. [Size: dtMeshHeader::polyCount]
 	float* verts;						///< The tile vertices. [Size: dtMeshHeader::vertCount]
+    // tile 之间的链接
 	dtLink* links;						///< The tile links. [Size: dtMeshHeader::maxLinkCount]
 	dtPolyDetail* detailMeshes;			///< The tile's detail sub-meshes. [Size: dtMeshHeader::detailMeshCount]
 	
@@ -660,9 +710,11 @@ private:
 	float m_orig[3];					///< Origin of the tile (0,0)
 	float m_tileWidth, m_tileHeight;	///< Dimensions of each tile.
 	int m_maxTiles;						///< Max number of tiles.
+    /// 计算 hash 快速查找 tile 使用
 	int m_tileLutSize;					///< Tile hash lookup size (must be pot).
 	int m_tileLutMask;					///< Tile hash lookup mask.
 
+    // 数组链表，存储 xy 坐标(注意是 tile 为单位的坐标)下的 tile 链表
 	dtMeshTile** m_posLookup;			///< Tile hash lookup.
 	dtMeshTile* m_nextFree;				///< Freelist of tiles.
 	dtMeshTile* m_tiles;				///< List of tiles.

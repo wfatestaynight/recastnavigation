@@ -234,9 +234,9 @@ bool rcMeshLoaderObj::load(const std::string& filename)
 		if (d > 0)
 		{
 			d = 1.0f/d;
-			n[0] *= d;
-			n[1] *= d;
-			n[2] *= d;
+			n[0] *= d; // x = n0/sqrtf(n[0]*n[0] + n[1]*n[1] + n[2]*n[2])
+			n[1] *= d; // y = n1/sqrtf(n[0]*n[0] + n[1]*n[1] + n[2]*n[2])
+			n[2] *= d; // z = n2/sqrtf(n[0]*n[0] + n[1]*n[1] + n[2]*n[2])
 		}
 	}
 	

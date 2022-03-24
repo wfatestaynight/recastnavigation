@@ -154,6 +154,8 @@ public:
 	{
 		if (m_texId == 0)
 		{
+            // 网格贴图 纹理映射: 双线性插值, Mipmap,  GL_LINEAR_MIPMAP_NEAREST
+            // 还有 Ripmap 各向异性过滤
 			// Create checker pattern.
 			const unsigned int col0 = duRGBA(215,215,215,255);
 			const unsigned int col1 = duRGBA(255,255,255,255);
@@ -175,6 +177,8 @@ public:
 				level++;
 			}
 			
+            // 注意这里设置，近处使用 GL_LINEAR_MIPMAP_NEAREST
+            // 远处使用 GL_LINEAR
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		}

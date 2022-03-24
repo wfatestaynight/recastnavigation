@@ -87,6 +87,7 @@ static bool addSpan(rcHeightfield& hf, const int x, const int y,
 					const unsigned char area, const int flagMergeThr)
 {
 	
+    // flagMergeThr 为参数 walkableClimb Max Climb 最大攀爬高度
 	int idx = x + y*hf.width;
 	
 	rcSpan* s = allocSpan(hf);
@@ -122,12 +123,15 @@ static bool addSpan(rcHeightfield& hf, const int x, const int y,
 		}
 		else
 		{
+            // cur 与 s 有重合的部分
 			// Merge spans.
 			if (cur->smin < s->smin)
 				s->smin = cur->smin;
 			if (cur->smax > s->smax)
 				s->smax = cur->smax;
 			
+            // smax 是最高处的差在可攀爬范围内就合并 flag
+            // 如果同一个 span，有的面是可行走，有的是不可行走，在合并之后会变成可行走
 			// Merge flags.
 			if (rcAbs((int)s->smax - (int)cur->smax) <= flagMergeThr)
 				s->area = rcMax(s->area, cur->area);
@@ -143,6 +147,7 @@ static bool addSpan(rcHeightfield& hf, const int x, const int y,
 		}
 	}
 	
+    // hf.spans 从链表开始到结束，3d 中的 y 值越来越高
 	// Insert new span.
 	if (prev)
 	{
@@ -180,23 +185,27 @@ bool rcAddSpan(rcContext* ctx, rcHeightfield& hf, const int x, const int y,
 	return true;
 }
 
+// 用一条与某一坐标轴平行的线分割凸多边形成两个凸多边形, 小于 x 的 是 out1
 // divides a convex polygons into two convex polygons on both sides of a line
 static void dividePoly(const float* in, int nin,
 					  float* out1, int* nout1,
 					  float* out2, int* nout2,
 					  float x, int axis)
 {
+    // axis 是 0,1,2 对应 xyz, x 为 axis 对应(xyz)的某一个值
 	float d[12];
 	for (int i = 0; i < nin; ++i)
 		d[i] = x - in[i*3+axis];
 
 	int m = 0, n = 0;
+    // 循环不重复选择多边形的两个点
 	for (int i = 0, j = nin-1; i < nin; j=i, ++i)
 	{
 		bool ina = d[j] >= 0;
 		bool inb = d[i] >= 0;
 		if (ina != inb)
 		{
+            // i 点与 j 点在 x 两边，利用三角形相似计算出 i 与 j 点所连成的线与 x 的交点，并分别放入分割的两个凸多边形点集合中
 			float s = d[j] / (d[j] - d[i]);
 			out1[m*3+0] = in[j*3+0] + (in[i*3+0] - in[j*3+0])*s;
 			out1[m*3+1] = in[j*3+1] + (in[i*3+1] - in[j*3+1])*s;
@@ -224,6 +233,7 @@ static void dividePoly(const float* in, int nin,
 			{
 				rcVcopy(out1 + m*3, in + i*3);
 				m++;
+                // 等于 0 就是在分割线上所以要两边都放
 				if (d[i] != 0)
 					continue;
 			}
@@ -257,6 +267,7 @@ static bool rasterizeTri(const float* v0, const float* v1, const float* v2,
 	rcVmax(tmax, v1);
 	rcVmax(tmax, v2);
 	
+    // 前面说过选取的区域不一定是整个 bounding box 的大小， 所以计算的时候跳过这些不需要计算的三角形
 	// If the triangle does not touch the bbox of the heightfield, skip the triagle.
 	if (!overlapBounds(bmin, bmax, tmin, tmax))
 		return true;
@@ -264,10 +275,15 @@ static bool rasterizeTri(const float* v0, const float* v1, const float* v2,
 	// Calculate the footprint of the triangle on the grid's y-axis
 	int y0 = (int)((tmin[2] - bmin[2])*ics);
 	int y1 = (int)((tmax[2] - bmin[2])*ics);
+    // 限制 y0 y1 在 0 到 h-1 之间
+    // 这个 y 其实是 3d 中的 z
 	y0 = rcClamp(y0, 0, h-1);
 	y1 = rcClamp(y1, 0, h-1);
 	
 	// Clip the triangle into all grid cells it touches.
+    // 7:一个三角形在分割时会被切4刀（即一个正方形格子的4条边），所以切完最多可能会变成一个7边形，也就是最多需要存7个顶点
+    // 3:对应一个顶点的 x y z 坐标值
+    // 4:有4份对应的数据，用来存放输入的图形和分割后的图形
 	float buf[7*3*4];
 	float *in = buf, *inrow = buf+7*3, *p1 = inrow+7*3, *p2 = p1+7*3;
 
@@ -280,10 +296,14 @@ static bool rasterizeTri(const float* v0, const float* v1, const float* v2,
 	{
 		// Clip polygon to row. Store the remaining polygon as well
 		const float cz = bmin[2] + y*cs;
+        // 把 in 表示的多边形以以 z=cz+cs 分割成 inrow(左边) 与 p1(右边)两个多边形
 		dividePoly(in, nvIn, inrow, &nvrow, p1, &nvIn, cz+cs, 2);
+        // x 轴右边的继续等待下次循环划分
 		rcSwap(in, p1);
+        // 左边没有数据
 		if (nvrow < 3) continue;
 		
+        // 只算的小于 cz+cs(左边)的数据，左边的是已经划分好的数据在 [cz+cs-1, cz+cs] 之间
 		// find the horizontal bounds in the row
 		float minX = inrow[0], maxX = inrow[0];
 		for (int i=1; i<nvrow; ++i)
@@ -302,10 +322,13 @@ static bool rasterizeTri(const float* v0, const float* v1, const float* v2,
 		{
 			// Clip polygon to column. store the remaining polygon as well
 			const float cx = bmin[0] + x*cs;
+            // 再按照 x 轴划分一次
 			dividePoly(inrow, nv2, p1, &nv, p2, &nv2, cx+cs, 0);
+            // x 轴右边的继续等待下次循环划分
 			rcSwap(inrow, p2);
 			if (nv < 3) continue;
 			
+            // 只算的小于 cx+cs(左边)的数据，左边的是已经划分好的数据在 [cx+cs-1, cx+cs] 之间
 			// Calculate min and max of the span.
 			float smin = p1[1], smax = p1[1];
 			for (int i = 1; i < nv; ++i)
@@ -326,6 +349,7 @@ static bool rasterizeTri(const float* v0, const float* v1, const float* v2,
 			unsigned short ismin = (unsigned short)rcClamp((int)floorf(smin * ich), 0, RC_SPAN_MAX_HEIGHT);
 			unsigned short ismax = (unsigned short)rcClamp((int)ceilf(smax * ich), (int)ismin+1, RC_SPAN_MAX_HEIGHT);
 			
+            // 到这里已经取到了一个格子的 bbox 数据，然后放入高度场中
 			if (!addSpan(hf, x, y, ismin, ismax, area, flagMergeThr))
 				return false;
 		}

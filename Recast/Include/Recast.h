@@ -441,6 +441,7 @@ struct rcPolyMesh
 /// @ingroup recast
 struct rcPolyMeshDetail
 {
+    // vert begin, nverts, tri begin, ntris
 	unsigned int* meshes;	///< The sub-mesh data. [Size: 4*#nmeshes] 
 	float* verts;			///< The mesh vertices. [Size: 3*#nverts] 
 	unsigned char* tris;	///< The mesh triangles. [Size: 4*#ntris] 
@@ -1067,8 +1068,10 @@ bool rcBuildRegionsMonotone(rcContext* ctx, rcCompactHeightfield& chf,
 ///  @param[in]		i		The index of the neighbor span.
 inline void rcSetCon(rcCompactSpan& s, int dir, int i)
 {
+    // s.con 是 24 位，所以 dir[0,4) 乘以 6
 	const unsigned int shift = (unsigned int)dir*6;
 	unsigned int con = s.con;
+    // 清空对应 dir 的数据并设置第 i 个 span 可以连接，每次更新是覆盖更新， 初始数据是 0x3f
 	s.con = (con & ~(0x3f << shift)) | (((unsigned int)i & 0x3f) << shift);
 }
 

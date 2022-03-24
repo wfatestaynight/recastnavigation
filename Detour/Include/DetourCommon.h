@@ -463,6 +463,8 @@ inline unsigned int dtIlog2(unsigned int v)
 
 inline int dtAlign4(int x) { return (x+3) & ~3; }
 
+// 换方向
+// x- <=> x+  z- <=> z+
 inline int dtOppositeTile(int side) { return (side+4) & 0x7; }
 
 inline void dtSwapByte(unsigned char* a, unsigned char* b)

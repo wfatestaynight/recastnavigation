@@ -105,6 +105,7 @@ private:
 	int m_nodeCount;
 };
 
+// 使用堆排序构建优先级队列
 class dtNodeQueue
 {
 public:

@@ -73,7 +73,7 @@ class InputGeom
 {
 	rcChunkyTriMesh* m_chunkyMesh;
 	rcMeshLoaderObj* m_mesh;
-	float m_meshBMin[3], m_meshBMax[3];
+	float m_meshBMin[3], m_meshBMax[3];  // 在 load 时候计算出的 bound min and max
 	BuildSettings m_buildSettings;
 	bool m_hasBuildSettings;
 	

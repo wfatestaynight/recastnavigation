@@ -25,7 +25,7 @@ struct BoundsItem
 {
 	float bmin[2];
 	float bmax[2];
-	int i;
+	int i; //由于会对包围盒按坐标排序，id记录了这个包围盒对应的输入三角形的id
 };
 
 static int compareItemX(const void* va, const void* vb)
@@ -50,6 +50,7 @@ static int compareItemY(const void* va, const void* vb)
 	return 0;
 }
 
+// 寻找到 imin 到 imax 中包围盒 xz 最大最小值,由 bmin bmax 返回
 static void calcExtends(const BoundsItem* items, const int /*nitems*/,
 						const int imin, const int imax,
 						float* bmin, float* bmax)
@@ -114,7 +115,7 @@ static void subdivide(BoundsItem* items, int nitems, int imin, int imax, int tri
 		
 		int	axis = longestAxis(node.bmax[0] - node.bmin[0],
 							   node.bmax[1] - node.bmin[1]);
-		
+		// 按照 x 或者 z(2d 平面上的 y)进行排序
 		if (axis == 0)
 		{
 			// Sort along x-axis
@@ -126,6 +127,7 @@ static void subdivide(BoundsItem* items, int nitems, int imin, int imax, int tri
 			qsort(items+imin, static_cast<size_t>(inum), sizeof(BoundsItem), compareItemY);
 		}
 		
+        // 取中点重新划分子节点
 		int isplit = imin+inum/2;
 		
 		// Left
@@ -180,6 +182,7 @@ bool rcCreateChunkyTriMesh(const float* verts, const int* tris, int ntris,
 
 	int curTri = 0;
 	int curNode = 0;
+    // 递归调用创建 bvh
 	subdivide(items, ntris, 0, ntris, trisPerChunk, curNode, cm->nodes, nchunks*4, curTri, cm->tris, tris);
 	
 	delete [] items;

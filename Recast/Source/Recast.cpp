@@ -348,6 +348,7 @@ void rcMarkWalkableTriangles(rcContext* ctx, const float walkableSlopeAngle,
 		const int* tri = &tris[i*3];
 		calcTriNormal(&verts[tri[0]*3], &verts[tri[1]*3], &verts[tri[2]*3], norm);
 		// Check if the face is walkable.
+        // 点乘 投影, 与 cos(x) 比较，三角形法线与垂直于 xz 平面的法线夹角正好等于三角形平面与 xz 平面的坡度
 		if (norm[1] > walkableThr)
 			areas[i] = RC_WALKABLE_AREA;
 	}
@@ -382,6 +383,7 @@ void rcClearUnwalkableTriangles(rcContext* ctx, const float walkableSlopeAngle,
 	}
 }
 
+// 获取高度场有用 span 的数量
 int rcGetHeightFieldSpanCount(rcContext* ctx, rcHeightfield& hf)
 {
 	rcIgnoreUnused(ctx);
@@ -432,6 +434,7 @@ bool rcBuildCompactHeightfield(rcContext* ctx, const int walkableHeight, const i
 	chf.maxRegions = 0;
 	rcVcopy(chf.bmin, hf.bmin);
 	rcVcopy(chf.bmax, hf.bmax);
+    // 如果再 AABB 的顶端保证也是可行走的
 	chf.bmax[1] += walkableHeight*hf.ch;
 	chf.cs = hf.cs;
 	chf.ch = hf.ch;
@@ -520,6 +523,7 @@ bool rcBuildCompactHeightfield(rcContext* ctx, const int walkableHeight, const i
 
 						// Check that the gap between the spans is walkable,
 						// and that the climb height between the gaps is not too high.
+                        // abs 的意思就是超过可攀爬高度你也上不去也下不来
 						if ((top - bot) >= walkableHeight && rcAbs((int)ns.y - (int)s.y) <= walkableClimb)
 						{
 							// Mark direction as walkable.
@@ -529,6 +533,8 @@ bool rcBuildCompactHeightfield(rcContext* ctx, const int walkableHeight, const i
 								tooHighNeighbour = rcMax(tooHighNeighbour, lidx);
 								continue;
 							}
+                            // 设置了这个方向上与 cell.index 相对位置(k-(int)nc.index)
+                            // 下面 break 意味着该方向只找一个
 							rcSetCon(s, dir, lidx);
 							break;
 						}

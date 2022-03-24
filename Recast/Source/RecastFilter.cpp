@@ -37,6 +37,7 @@ void rcFilterLowHangingWalkableObstacles(rcContext* ctx, const int walkableClimb
 {
 	rcAssert(ctx);
 
+    // 过滤低垂可行走障碍,参数:最大攀爬高度 walkableClimb (可上楼梯) 注意 span 是一个 3d 平面中的凸多边形
 	rcScopedTimer timer(ctx, RC_TIMER_FILTER_LOW_OBSTACLES);
 	
 	const int w = solid.width;
@@ -84,6 +85,8 @@ void rcFilterLedgeSpans(rcContext* ctx, const int walkableHeight, const int walk
 {
 	rcAssert(ctx);
 	
+    // 过滤 span 凸起区间, 判断自己是凸的还有邻居是凸的情况设置为不可通区域
+    // 参数:最大攀爬高度 walkableClimb (不能翻墙)， 人的高度 walkableHeight 不能钻过去
 	rcScopedTimer timer(ctx, RC_TIMER_FILTER_BORDER);
 
 	const int w = solid.width;
@@ -111,6 +114,9 @@ void rcFilterLedgeSpans(rcContext* ctx, const int walkableHeight, const int walk
 				int asmin = s->smax;
 				int asmax = s->smax;
 
+                // 与 x,y 周围 4 个方向的邻居做比较
+                // 1. 找到邻居的最小高度
+                // 2. 找到邻居中可通行的最小最大高度
 				for (int dir = 0; dir < 4; ++dir)
 				{
 					int dx = x + rcGetDirOffsetX(dir);
@@ -122,14 +128,18 @@ void rcFilterLedgeSpans(rcContext* ctx, const int walkableHeight, const int walk
 						continue;
 					}
 
+                    // 这段应该是判断邻居最低的地块下面的地区，也就是 y 负无穷到第一块 span
 					// From minus infinity to the first span.
 					rcSpan* ns = solid.spans[dx + dy*w];
+                    // 注意这里是可攀爬高度的负数
 					int nbot = -walkableClimb;
 					int ntop = ns ? (int)ns->smin : MAX_HEIGHT;
 					// Skip neightbour if the gap between the spans is too small.
+                    // 注意这里是判断的是可通行高度
 					if (rcMin(top,ntop) - rcMax(bot,nbot) > walkableHeight)
 						minh = rcMin(minh, nbot - bot);
 					
+                    // 这里判断从最低的第一块 span 到 y 正无穷距离
 					// Rest of the spans.
 					for (ns = solid.spans[dx + dy*w]; ns; ns = ns->next)
 					{
@@ -155,12 +165,14 @@ void rcFilterLedgeSpans(rcContext* ctx, const int walkableHeight, const int walk
 				// neighbour span is less than the walkableClimb.
 				if (minh < -walkableClimb)
 				{
+                    // 邻居存在一面是悬崖就是不通的 (自己是凸的)
 					s->area = RC_NULL_AREA;
 				}
 				// If the difference between all neighbours is too large,
 				// we are at steep slope, mark the span as ledge.
 				else if ((asmax - asmin) > walkableClimb)
 				{
+                    // 抖斜坡也是不通的 (邻居是凸的)
 					s->area = RC_NULL_AREA;
 				}
 			}
@@ -178,6 +190,7 @@ void rcFilterWalkableLowHeightSpans(rcContext* ctx, int walkableHeight, rcHeight
 {
 	rcAssert(ctx);
 	
+    // span 之间距离小于 walkableHeight 则不可通
 	rcScopedTimer timer(ctx, RC_TIMER_FILTER_WALKABLE);
 	
 	const int w = solid.width;

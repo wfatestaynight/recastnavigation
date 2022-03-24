@@ -185,6 +185,7 @@ static int createBVTree(dtNavMeshCreateParams* params, dtBVNode* nodes, int /*nn
 			float bmin[3];
 			float bmax[3];
 
+            // 求凸多边形采样点的 AABB 包围盒
 			const float* dv = &params->detailVerts[vb*3];
 			dtVcopy(bmin, dv);
 			dtVcopy(bmax, dv);
@@ -195,6 +196,7 @@ static int createBVTree(dtNavMeshCreateParams* params, dtBVNode* nodes, int /*nn
 				dtVmax(bmax, &dv[j * 3]);
 			}
 
+            // 存的是以 cs 为单元格的坐标系
 			// BV-tree uses cs for all dimensions
 			it.bmin[0] = (unsigned short)dtClamp((int)((bmin[0] - params->bmin[0])*quantFactor), 0, 0xffff);
 			it.bmin[1] = (unsigned short)dtClamp((int)((bmin[1] - params->bmin[1])*quantFactor), 0, 0xffff);
@@ -394,6 +396,7 @@ bool dtCreateNavMeshData(dtNavMeshCreateParams* params, unsigned char** outData,
 		for (int i = 0; i < params->polyCount; ++i)
 		{
 			const unsigned short* p = &params->polys[i*nvp*2];
+            // num of verts
 			int ndv = params->detailMeshes[i*4+1];
 			int nv = 0;
 			for (int j = 0; j < nvp; ++j)
@@ -586,6 +589,7 @@ bool dtCreateNavMeshData(dtNavMeshCreateParams* params, unsigned char** outData,
 			// Copy vertices except the first 'nv' verts which are equal to nav poly verts.
 			if (ndv-nv)
 			{
+                // 去掉的凸多边形的顶点，只剩下里面的点
 				memcpy(&navDVerts[vbase*3], &params->detailVerts[(vb+nv)*3], sizeof(float)*3*(ndv-nv));
 				vbase += (unsigned short)(ndv-nv);
 			}

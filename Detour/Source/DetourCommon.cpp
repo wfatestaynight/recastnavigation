@@ -201,6 +201,7 @@ void dtCalcPolyCenter(float* tc, const unsigned short* idx, int nidx, const floa
 	tc[2] *= s;
 }
 
+// 如果 pos 在三角形内部，通过三角形重心坐标插值计算 pos 的高度
 bool dtClosestHeightPointTriangle(const float* p, const float* a, const float* b, const float* c, float& h)
 {
 	const float EPS = 1e-6f;
@@ -211,7 +212,9 @@ bool dtClosestHeightPointTriangle(const float* p, const float* a, const float* b
 	dtVsub(v2, p, a);
 
 	// Compute scaled barycentric coordinates
+    // 计算缩放重心坐标
 	float denom = v0[0] * v1[2] - v0[2] * v1[0];
+    // 不共线
 	if (fabsf(denom) < EPS)
 		return false;
 
@@ -225,6 +228,7 @@ bool dtClosestHeightPointTriangle(const float* p, const float* a, const float* b
 	}
 
 	// If point lies inside the triangle, return interpolated ycoord.
+    // 如果点位于三角形内，则返回插值的Y坐标。
 	if (u >= 0.0f && v >= 0.0f && (u + v) <= denom) {
 		h = a[1] + (v0[1] * u + v1[1] * v) / denom;
 		return true;
@@ -264,8 +268,10 @@ bool dtDistancePtPolyEdgesSqr(const float* pt, const float* verts, const int nve
 		if (((vi[2] > pt[2]) != (vj[2] > pt[2])) &&
 			(pt[0] < (vj[0]-vi[0]) * (pt[2]-vi[2]) / (vj[2]-vi[2]) + vi[0]) )
 			c = !c;
+        // 返回到每个边的距离以及插值 t
 		ed[j] = dtDistancePtSegSqr2D(pt, vj, vi, et[j]);
 	}
+    // 确定是否在多边形里面
 	return c;
 }
 
@@ -338,6 +344,8 @@ void dtRandomPointInConvexPoly(const float* pts, const int npts, float* areas,
 		areas[i] = dtTriArea2D(&pts[0], &pts[(i-1)*3], &pts[i*3]);
 		areasum += dtMax(0.001f, areas[i]);
 	}
+    
+    // 选择一个三角形
 	// Find sub triangle weighted by area.
 	const float thr = s*areasum;
 	float acc = 0.0f;
@@ -356,6 +364,7 @@ void dtRandomPointInConvexPoly(const float* pts, const int npts, float* areas,
 	
 	float v = dtMathSqrtf(t);
 	
+    // 算出来个三角形重心坐标得到三角形的一个点
 	const float a = 1 - v;
 	const float b = (1 - u) * v;
 	const float c = u * v;

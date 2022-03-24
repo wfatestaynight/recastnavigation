@@ -68,6 +68,7 @@ static int fixupCorridor(dtPolyRef* path, const int npath, const int maxPath,
 	int furthestVisited = -1;
 	
 	// Find furthest common polygon.
+    // 求最远公共多边形
 	for (int i = npath-1; i >= 0; --i)
 	{
 		bool found = false;
@@ -84,13 +85,16 @@ static int fixupCorridor(dtPolyRef* path, const int npath, const int maxPath,
 			break;
 	}
 
-	// If no intersection found just return current path. 
+	// If no intersection found just return current path.
+    // 如果没有找到交叉点，只返回当前路径
 	if (furthestPath == -1 || furthestVisited == -1)
 		return npath;
 	
-	// Concatenate paths.	
+	// Concatenate paths.
+    // 连接路径
 
 	// Adjust beginning of the buffer to include the visited.
+    // 调整缓冲区的开头，以包括已访问的缓冲区。
 	const int req = nvisited - furthestVisited;
 	const int orig = rcMin(furthestPath+1, npath);
 	int size = rcMax(0, npath-orig);
@@ -117,6 +121,8 @@ static int fixupCorridor(dtPolyRef* path, const int npath, const int maxPath,
 //  +-S-+-T-+
 //  |:::|   | <-- the step can end up in here, resulting U-turn path.
 //  +---+---+
+// 此函数用于检查路径是否有小的U形转弯，即路径中更远的多边形是否与路径中的第一个多边形相邻。
+// 如果发生这种情况，就会采取捷径。如果目标（T）位置位于平铺边界，并且我们(S)平行于平铺边缘接近它，则可能会发生这种情况。顶点的选择可以是任意的，
 static int fixupShortcuts(dtPolyRef* path, int npath, dtNavMeshQuery* navQuery)
 {
 	if (npath < 3)
@@ -178,6 +184,7 @@ static bool getSteerTarget(dtNavMeshQuery* navQuery, const float* startPos, cons
 	unsigned char steerPathFlags[MAX_STEER_POINTS];
 	dtPolyRef steerPathPolys[MAX_STEER_POINTS];
 	int nsteerPath = 0;
+    // 使用拉绳算法进行确定路径关键点
 	navQuery->findStraightPath(startPos, endPos, path, pathSize,
 							   steerPath, steerPathFlags, steerPathPolys, &nsteerPath, MAX_STEER_POINTS);
 	if (!nsteerPath)
@@ -192,6 +199,8 @@ static bool getSteerTarget(dtNavMeshQuery* navQuery, const float* startPos, cons
 
 	
 	// Find vertex far enough to steer to.
+    // FIXME: 这是干嘛 steerPos 有啥用
+    // 找到足够远的顶点以转向
 	int ns = 0;
 	while (ns < nsteerPath)
 	{
@@ -716,6 +725,7 @@ void NavMeshTesterTool::recalc()
 				memcpy(polys, m_polys, sizeof(dtPolyRef)*m_npolys); 
 				int npolys = m_npolys;
 				
+                // 取得在起点终点在多边形上的最接近的点
 				float iterPos[3], targetPos[3];
 				m_navQuery->closestPointOnPoly(m_startRef, m_spos, iterPos, 0);
 				m_navQuery->closestPointOnPoly(polys[npolys-1], m_epos, targetPos, 0);
@@ -730,6 +740,7 @@ void NavMeshTesterTool::recalc()
 				
 				// Move towards target a small advancement at a time until target reached or
 				// when ran out of memory to store the path.
+                // 目标移动一次前进一小步，直到达到目标或存储路径的内存不足。
 				while (npolys && m_nsmoothPath < MAX_SMOOTH)
 				{
 					// Find location to steer towards.

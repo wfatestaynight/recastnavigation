@@ -495,6 +495,7 @@ void InputGeom::deleteOffMeshConnection(int i)
 	m_offMeshConFlags[i] = m_offMeshConFlags[m_offMeshConCount];
 }
 
+// 绘制非网格连接信息，需要在 OffMeshConnectionTool 点击设置之后才有这些信息
 void InputGeom::drawOffMeshConnections(duDebugDraw* dd, bool hilight)
 {
 	unsigned int conColor = duRGBA(192,0,128,192);

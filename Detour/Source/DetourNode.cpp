@@ -118,6 +118,7 @@ dtNode* dtNodePool::findNode(dtPolyRef id, unsigned char state)
 	return 0;
 }
 
+// 找到返回或者构建一个 node
 dtNode* dtNodePool::getNode(dtPolyRef id, unsigned char state)
 {
 	unsigned int bucket = dtHashRef(id) & (m_hashSize-1);
@@ -169,6 +170,7 @@ dtNodeQueue::~dtNodeQueue()
 	dtFree(m_heap);
 }
 
+// 堆排序
 void dtNodeQueue::bubbleUp(int i, dtNode* node)
 {
 	int parent = (i-1)/2;

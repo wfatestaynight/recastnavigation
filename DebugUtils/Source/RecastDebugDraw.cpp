@@ -94,6 +94,7 @@ void duDebugDrawTriMeshSlope(duDebugDraw* dd, const float* verts, int /*nverts*/
 	
 	dd->texture(true);
 
+    // WEIFEI 这个颜色定义的也比较随便？
 	const unsigned int unwalkable = duRGBA(192,128,0,255);
 	
 	dd->begin(DU_DRAW_TRIS);
@@ -101,7 +102,9 @@ void duDebugDrawTriMeshSlope(duDebugDraw* dd, const float* verts, int /*nverts*/
 	{
 		const float* norm = &normals[i];
 		unsigned int color;
+        // WEIFEI 为啥会用下面的公式计算基础颜色不知道，可能是是更明亮些？
 		unsigned char a = (unsigned char)(220*(2+norm[0]+norm[1])/4);
+        // 点乘 投影，三角形法线与垂直于 xz 平面的法线夹角正好等于三角形平面与 xz 平面的坡度
 		if (norm[1] < walkableThr)
 			color = duLerpCol(duRGBA(a,a,a,255), unwalkable, 64);
 		else
@@ -118,7 +121,9 @@ void duDebugDrawTriMeshSlope(duDebugDraw* dd, const float* verts, int /*nverts*/
 			ax = 2;
 		ax = (1<<ax)&3; // +1 mod 3
 		ay = (1<<ax)&3; // +1 mod 3
-		
+        // 法线在 x 轴的分量绝对值比较大(面更垂直于 x)，使用点坐标的 [y,z] 值作为贴图 uv
+        // 法线在 y 轴的分量绝对值比较大(面更垂直于 y)，使用点坐标的 [z,x] 值作为贴图 uv
+        // 法线在 z 轴的分量绝对值比较大(面更垂直于 z)，使用点坐标的 [x,y] 值作为贴图 uv
 		uva[0] = va[ax]*texScale;
 		uva[1] = va[ay]*texScale;
 		uvb[0] = vb[ax]*texScale;
@@ -126,6 +131,8 @@ void duDebugDrawTriMeshSlope(duDebugDraw* dd, const float* verts, int /*nverts*/
 		uvc[0] = vc[ax]*texScale;
 		uvc[1] = vc[ay]*texScale;
 		
+        // 传入的 uv 明显不是在 [0,1] 之间，是下面自己处理了嘛
+        // 假如你给的纹理坐标大于1, 那么将会贴多个纹理
 		dd->vertex(va, color, uva);
 		dd->vertex(vb, color, uvb);
 		dd->vertex(vc, color, uvc);

@@ -50,9 +50,18 @@ bool rcErodeWalkableArea(rcContext* ctx, int radius, rcCompactHeightfield& chf)
 		return false;
 	}
 	
+    
+    // dist[] 数组表示每个 CompactSpan 到边界或者阻挡的距离（单位是格子）
+    // 1. 先找到不可行走的 span 和边界 span(可行走但邻居数<4),把它们的 dist 标记为0
+    // 2. 从左上角开始向右下角遍历每个格子的 span，用上半方4个格子更新 dist
+    // 3. 从右下角开始向左上角遍历每个格子的 span，用下半方4个格子更新 dist
+    // 4. 将 dist 小于直径(因为 distance 乘了 2)的 span 都标记为不可行走
+    
 	// Init distance.
+    // 注意初值是 0xff
 	memset(dist, 0xff, sizeof(unsigned char)*chf.spanCount);
 	
+    // 标记可行走的边界 cells，把不可行走的和边界(可行走但邻居数<4) dist 都设置成了 0
 	// Mark boundary cells.
 	for (int y = 0; y < h; ++y)
 	{
@@ -83,6 +92,7 @@ bool rcErodeWalkableArea(rcContext* ctx, int radius, rcCompactHeightfield& chf)
 						}
 					}
 					// At least one missing neighbour.
+                    // 至少有一个边没有邻居就把 dist[i] 设置为 0
 					if (nc != 4)
 						dist[i] = 0;
 				}
@@ -109,11 +119,13 @@ bool rcErodeWalkableArea(rcContext* ctx, int radius, rcCompactHeightfield& chf)
 					const int ay = y + rcGetDirOffsetY(0);
 					const int ai = (int)chf.cells[ax+ay*w].index + rcGetCon(s, 0);
 					const rcCompactSpan& as = chf.spans[ai];
+                    // 一个格子的大小是 2，对角线是 3，为了方便计算 1:1.4
 					nd = (unsigned char)rcMin((int)dist[ai]+2, 255);
 					if (nd < dist[i])
 						dist[i] = nd;
 					
 					// (-1,-1)
+                    // 注意这里是 as
 					if (rcGetCon(as, 3) != RC_NOT_CONNECTED)
 					{
 						const int aax = ax + rcGetDirOffsetX(3);
@@ -151,6 +163,7 @@ bool rcErodeWalkableArea(rcContext* ctx, int radius, rcCompactHeightfield& chf)
 	}
 	
 	// Pass 2
+    // 注意这里循环是倒着来的
 	for (int y = h-1; y >= 0; --y)
 	{
 		for (int x = w-1; x >= 0; --x)
@@ -356,9 +369,14 @@ void rcMarkBoxArea(rcContext* ctx, const float* bmin, const float* bmax, unsigne
 }
 
 
+// 判断点是否在一个凸多边形中
+// https://wrf.ecse.rpi.edu/Research/Short_Notes/pnpoly.html
+// https://en.wikipedia.org/wiki/Point_in_polygon Ray casting algorithm
+// 从测试点水平运行一个半无限射线(增加 x，固定 y) ，并计算它穿过多少条边。在每个交叉点，射线在内外之间切换。这就是所谓的若尔当曲线定理
 static int pointInPoly(int nvert, const float* verts, const float* p)
 {
 	int i, j, c = 0;
+    // j 是 i 前一个
 	for (i = 0, j = nvert-1; i < nvert; j = i++)
 	{
 		const float* vi = &verts[i*3];
@@ -463,7 +481,7 @@ int rcOffsetPoly(const float* verts, const int nverts, const float offset,
 		float d0 = dx0*dx0 + dy0*dy0;
 		if (d0 > 1e-6f)
 		{
-			d0 = 1.0f/rcSqrt(d0);
+			d0 = 1.0f/rc (d0);
 			dx0 *= d0;
 			dy0 *= d0;
 		}

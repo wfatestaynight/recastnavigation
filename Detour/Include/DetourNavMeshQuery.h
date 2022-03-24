@@ -49,6 +49,7 @@ public:
 	///  @param[in]		ref		The reference id of the polygon test.
 	///  @param[in]		tile	The tile containing the polygon.
 	///  @param[in]		poly  The polygon to test.
+    ///  过滤多边形 flag
 #ifdef DT_VIRTUAL_QUERYFILTER
 	virtual bool passFilter(const dtPolyRef ref,
 							const dtMeshTile* tile,
@@ -72,6 +73,7 @@ public:
 	///  @param[in]		nextRef		The refernece id of the next polygon. [opt]
 	///  @param[in]		nextTile	The tile containing the next polygon. [opt]
 	///  @param[in]		nextPoly	The next polygon. [opt]
+    ///  计算多边形 cost A* 使用
 #ifdef DT_VIRTUAL_QUERYFILTER
 	virtual float getCost(const float* pa, const float* pb,
 						  const dtPolyRef prevRef, const dtMeshTile* prevTile, const dtPoly* prevPoly,

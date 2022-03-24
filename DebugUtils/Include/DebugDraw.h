@@ -71,6 +71,7 @@ struct duDebugDraw
 	virtual unsigned int areaToCol(unsigned int area);
 };
 
+// alpha 通道一般用作不透明度参数, 0 完全透明 255 完全不透明
 inline unsigned int duRGBA(int r, int g, int b, int a)
 {
 	return ((unsigned int)r) | ((unsigned int)g << 8) | ((unsigned int)b << 16) | ((unsigned int)a << 24);
@@ -102,6 +103,7 @@ inline unsigned int duDarkenCol(unsigned int col)
 	return ((col >> 1) & 0x007f7f7f) | (col & 0xff000000);
 }
 
+// 颜色插值？
 inline unsigned int duLerpCol(unsigned int ca, unsigned int cb, unsigned int u)
 {
 	const unsigned int ra = ca & 0xff;

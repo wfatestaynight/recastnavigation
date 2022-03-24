@@ -26,7 +26,7 @@
 class Sample_SoloMesh : public Sample
 {
 protected:
-	bool m_keepInterResults;
+	bool m_keepInterResults; // 保留中间结果
 	float m_totalBuildTimeMs;
 
 	unsigned char* m_triareas;
